@@ -5,7 +5,6 @@ from esphome import automation
 from esphome.automation import maybe_simple_id
 from esphome.const import (
     CONF_ID,
-    CONF_CANBUS_ID,
     CONF_UPDATE_INTERVAL,
     CONF_INPUT_VOLTAGE,
     CONF_OUTPUT_VOLTAGE,
@@ -16,6 +15,9 @@ from esphome.const import (
     CONF_MIN_CURRENT,
     CONF_MAX_CURRENT,
 )
+
+# 定义缺失的常量（因为 ESPHome 2025.4.2 中已移除）
+CONF_CANBUS_ID = "canbus_id"
 
 CODEOWNERS = ["@your_github_username"]
 DEPENDENCIES = ["canbus"]
@@ -187,7 +189,7 @@ async def huawei_binary_sensor_to_code(config, sensor_id, template_arg, args):
 # 动作注册
 @automation.register_action(
     "huawei_r4875g1.set_voltage",
-    HuaweiR4875G1SetVoltageAction,
+    huawei_r4875g1_ns.class_("HuaweiR4875G1SetVoltageAction"),
     SET_VOLTAGE_ACTION_SCHEMA,
 )
 async def set_voltage_action_to_code(config, action_id, template_arg, args):
@@ -199,7 +201,7 @@ async def set_voltage_action_to_code(config, action_id, template_arg, args):
 
 @automation.register_action(
     "huawei_r4875g1.set_current",
-    HuaweiR4875G1SetCurrentAction,
+    huawei_r4875g1_ns.class_("HuaweiR4875G1SetCurrentAction"),
     SET_CURRENT_ACTION_SCHEMA,
 )
 async def set_current_action_to_code(config, action_id, template_arg, args):
@@ -211,7 +213,7 @@ async def set_current_action_to_code(config, action_id, template_arg, args):
 
 @automation.register_action(
     "huawei_r4875g1.enable",
-    HuaweiR4875G1EnableAction,
+    huawei_r4875g1_ns.class_("HuaweiR4875G1EnableAction"),
     ENABLE_ACTION_SCHEMA,
 )
 async def enable_action_to_code(config, action_id, template_arg, args):
@@ -222,7 +224,7 @@ async def enable_action_to_code(config, action_id, template_arg, args):
 
 @automation.register_action(
     "huawei_r4875g1.disable",
-    HuaweiR4875G1DisableAction,
+    huawei_r4875g1_ns.class_("HuaweiR4875G1DisableAction"),
     DISABLE_ACTION_SCHEMA,
 )
 async def disable_action_to_code(config, action_id, template_arg, args):
