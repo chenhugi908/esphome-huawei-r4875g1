@@ -15,8 +15,12 @@ static const uint32_t SET_COMMAND_ID = 0x108180FE;
 
 void HuaweiR4875G1::setup() {
   // 注册CAN监听
+  if (canbus_ == nullptr) {
+    ESP_LOGE(TAG, "CAN bus pointer is null!");
+    return;
+  }
   canbus_->add_listener(this);
-  
+
   // 设置CAN过滤器（只接收状态响应帧）
   canbus::CanFilter filter = {
     .can_id = STATUS_RESPONSE_ID,
@@ -24,7 +28,7 @@ void HuaweiR4875G1::setup() {
     .extended = true
   };
   canbus_->add_filter(filter);
-  
+
   // 初始请求状态
   request_status_();
 }
@@ -35,10 +39,12 @@ void HuaweiR4875G1::loop() {
     last_update_ = now;
     request_status_();
   }
+  // 可以在此处增加掉线报警处理
 }
 
 void HuaweiR4875G1::on_can_message(const canbus::CanFrame &frame) {
   if (frame.can_id == STATUS_RESPONSE_ID && frame.data.size() >= 8) {
+    last_frame_time_ = millis();
     process_status_frame_(frame);
   }
 }
@@ -54,7 +60,6 @@ void HuaweiR4875G1::process_status_frame_(const canbus::CanFrame &frame) {
   uint8_t param_id = data[1];
   float value = 0.0f;
 
-  // 根据参数ID解析
   switch (param_id) {
     case 0x70:  // Input Power
       value = parse_value_(data, 1024.0f, OUTPUT_POWER);
@@ -84,7 +89,7 @@ void HuaweiR4875G1::process_status_frame_(const canbus::CanFrame &frame) {
       value = parse_value_(data, 1024.0f, TEMPERATURE);
       sensor_values_[TEMPERATURE] = value;
       break;
-    case 0x81:  // Output Current (实际值)
+    case 0x81:  // Output Current
       value = parse_value_(data, 1024.0f, OUTPUT_CURRENT);
       sensor_values_[OUTPUT_CURRENT] = value;
       break;
@@ -95,20 +100,28 @@ void HuaweiR4875G1::process_status_frame_(const canbus::CanFrame &frame) {
 }
 
 float HuaweiR4875G1::parse_value_(const uint8_t *data, float divisor, SensorType sensor_type) {
-  // 数据格式：第4-7字节为值（大端序）
+  if (divisor == 0.0f) {
+    ESP_LOGE(TAG, "Divisor is zero for sensor_type %d", int(sensor_type));
+    return 0.0f;
+  }
   uint32_t raw = (uint32_t(data[4]) << 24) | 
                 (uint32_t(data[5]) << 16) | 
                 (uint32_t(data[6]) << 8) | 
                 data[7];
-                
   float value = raw / divisor;
-  
-  // 应用校准
+  if (sensor_type < 0 || sensor_type >= SENSOR_TYPE_COUNT) {
+    ESP_LOGW(TAG, "Calibration sensor_type %d out of range!", int(sensor_type));
+    return value;
+  }
   Calibration calib = calibrations_[sensor_type];
   return (value * calib.multiplier) + calib.offset;
 }
 
 void HuaweiR4875G1::send_command_(uint32_t can_id, const std::vector<uint8_t> &data) {
+  if (canbus_ == nullptr) {
+    ESP_LOGE(TAG, "CAN bus pointer is null!");
+    return;
+  }
   canbus::CanFrame frame;
   frame.can_id = can_id;
   frame.extended = true;
@@ -116,7 +129,6 @@ void HuaweiR4875G1::send_command_(uint32_t can_id, const std::vector<uint8_t> &d
   canbus_->send_data(frame);
 }
 
-// 传感器校准方法
 void HuaweiR4875G1::set_input_voltage_calibration(float mult, float offset) {
   calibrations_[INPUT_VOLTAGE] = {mult, offset};
 }
@@ -133,7 +145,6 @@ void HuaweiR4875G1::set_output_current_calibration(float mult, float offset) {
   calibrations_[OUTPUT_CURRENT] = {mult, offset};
 }
 
-// 设置范围
 void HuaweiR4875G1::set_voltage_limits(float min, float max) {
   min_voltage_ = min;
   max_voltage_ = max;
@@ -144,7 +155,6 @@ void HuaweiR4875G1::set_current_limits(float min, float max) {
   max_current_ = max;
 }
 
-// 控制方法
 void HuaweiR4875G1::set_voltage(float voltage) {
   if (voltage < min_voltage_ || voltage > max_voltage_) {
     ESP_LOGE(TAG, "Voltage %.1fV is out of range [%.1f, %.1f]", voltage, min_voltage_, max_voltage_);
@@ -173,14 +183,12 @@ void HuaweiR4875G1::disable() {
   enabled_ = false;
 }
 
-// 发送电压设置命令
 void HuaweiR4875G1::send_voltage_setting_(float voltage) {
-  // 转换为十分之一伏，然后乘以102
   uint16_t deci_volts = static_cast<uint16_t>(voltage * 10);
   uint32_t value = deci_volts * 102;
   
   std::vector<uint8_t> data = {
-    0x01, 0x00, 0x00, 0x00,  // 参数ID 0x0000（在线输出电压）
+    0x01, 0x00, 0x00, 0x00,
     static_cast<uint8_t>((value >> 24) & 0xFF),
     static_cast<uint8_t>((value >> 16) & 0xFF),
     static_cast<uint8_t>((value >> 8) & 0xFF),
@@ -190,14 +198,12 @@ void HuaweiR4875G1::send_voltage_setting_(float voltage) {
   send_command_(SET_COMMAND_ID, data);
 }
 
-// 发送电流设置命令
 void HuaweiR4875G1::send_current_setting_(float current) {
-  // 转换为十分之一安，然后乘以1.5（全功率模式）
   uint16_t deci_amps = static_cast<uint16_t>(current * 10);
   uint32_t value = static_cast<uint32_t>(deci_amps * 1.5f);
   
   std::vector<uint8_t> data = {
-    0x01, 0x03, 0x00, 0x00,  // 参数ID 0x0003（在线电流限制）
+    0x01, 0x03, 0x00, 0x00,
     static_cast<uint8_t>((value >> 24) & 0xFF),
     static_cast<uint8_t>((value >> 16) & 0xFF),
     static_cast<uint8_t>((value >> 8) & 0xFF),
@@ -207,22 +213,19 @@ void HuaweiR4875G1::send_current_setting_(float current) {
   send_command_(SET_COMMAND_ID, data);
 }
 
-// 发送控制命令
 void HuaweiR4875G1::send_control_command_(uint8_t command) {
-  // 控制命令（启用/禁用）对应参数ID 0x32
   std::vector<uint8_t> data = {
     0x01, 0x32, 0x00, command, 
     0x00, 0x00, 0x00, 0x00
   };
-  
   send_command_(SET_COMMAND_ID, data);
 }
 
-// 获取传感器值
 float HuaweiR4875G1::get_sensor_value(SensorType sensor_type) {
   if (sensor_type >= 0 && sensor_type < SENSOR_TYPE_COUNT) {
     return sensor_values_[sensor_type];
   }
+  ESP_LOGW(TAG, "Sensor type %d out of range!", int(sensor_type));
   return 0.0f;
 }
 

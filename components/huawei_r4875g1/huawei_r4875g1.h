@@ -33,6 +33,8 @@ class HuaweiR4875G1 : public Component, public canbus::CanbusListener {
 
   // 状态获取
   bool is_enabled() const { return enabled_; }
+  // 是否掉线
+  bool is_online() const { return (millis() - last_frame_time_) < offline_timeout_; }
 
   void setup() override;
   void loop() override;
@@ -49,7 +51,7 @@ class HuaweiR4875G1 : public Component, public canbus::CanbusListener {
   // 参数解析
   float parse_value_(const uint8_t *data, float divisor, SensorType sensor_type);
 
-  canbus::Canbus *canbus_;
+  canbus::Canbus *canbus_{nullptr};
   uint32_t update_interval_{1000};
   uint32_t last_update_{0};
   bool enabled_{false};
@@ -72,6 +74,10 @@ class HuaweiR4875G1 : public Component, public canbus::CanbusListener {
   // 当前设置值
   float current_voltage_{53.5f};
   float current_current_{50.0f};
+
+  // 掉线检测
+  uint32_t last_frame_time_{0};
+  uint32_t offline_timeout_{5000}; // 超过5s未收到CAN帧判定为掉线
 };
 
 // 传感器组件
@@ -96,7 +102,8 @@ class HuaweiBinarySensor : public binary_sensor::BinarySensor, public PollingCom
   HuaweiBinarySensor(HuaweiR4875G1 *parent) : PollingComponent(1000), parent_(parent) {}
   
   void update() override {
-    publish_state(parent_->is_enabled());
+    // 如果设备掉线，报告为不可用
+    publish_state(parent_->is_enabled() && parent_->is_online());
   }
   
  protected:

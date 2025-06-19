@@ -16,10 +16,10 @@ from esphome.const import (
     CONF_MAX_CURRENT,
 )
 
-# 定义缺失的常量（因为 ESPHome 2025.4.2 中已移除）
+# ESPHome 2025.4.2 后已移除的常量
 CONF_CANBUS_ID = "canbus_id"
 
-CODEOWNERS = ["@your_github_username"]
+CODEOWNERS = ["@chenhugi908"]
 DEPENDENCIES = ["canbus"]
 AUTO_LOAD = ["sensor", "binary_sensor"]
 
@@ -39,7 +39,6 @@ SENSOR_TYPES = {
     "temperature": SensorType.TEMPERATURE,
 }
 
-# 配置模式
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(HuaweiR4875G1),
@@ -88,7 +87,6 @@ CONFIG_SCHEMA = cv.Schema(
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
-# 传感器配置
 SENSOR_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_ID): cv.use_id(HuaweiR4875G1),
@@ -96,14 +94,12 @@ SENSOR_SCHEMA = cv.Schema(
     }
 ).extend(sensor.SENSOR_SCHEMA)
 
-# 状态传感器配置
 BINARY_SENSOR_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_ID): cv.use_id(HuaweiR4875G1),
     }
 ).extend(binary_sensor.BINARY_SENSOR_SCHEMA)
 
-# 动作定义
 SET_VOLTAGE_ACTION_SCHEMA = maybe_simple_id(
     {
         cv.Required(CONF_ID): cv.use_id(HuaweiR4875G1),
@@ -130,17 +126,15 @@ DISABLE_ACTION_SCHEMA = maybe_simple_id(
     }
 )
 
-# 代码生成
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-    
+
     canbus_ = await cg.get_variable(config[CONF_CANBUS_ID])
     cg.add(var.set_canbus(canbus_))
-    
+
     cg.add(var.set_update_interval(config[CONF_UPDATE_INTERVAL]))
-    
-    # 传感器校准
+
     sensors_config = config.get("sensors", {})
     if CONF_INPUT_VOLTAGE in sensors_config:
         calib = sensors_config[CONF_INPUT_VOLTAGE]
@@ -154,23 +148,21 @@ async def to_code(config):
     if CONF_OUTPUT_CURRENT in sensors_config:
         calib = sensors_config[CONF_OUTPUT_CURRENT]
         cg.add(var.set_output_current_calibration(calib["multiplier"], calib["offset"]))
-    
-    # 设置范围
+
     voltage_limits = config.get("voltage_limits", {})
     if voltage_limits:
         cg.add(var.set_voltage_limits(
-            voltage_limits[CONF_MIN_VOLTAGE], 
+            voltage_limits[CONF_MIN_VOLTAGE],
             voltage_limits[CONF_MAX_VOLTAGE]
         ))
-    
+
     current_limits = config.get("current_limits", {})
     if current_limits:
         cg.add(var.set_current_limits(
-            current_limits[CONF_MIN_CURRENT], 
+            current_limits[CONF_MIN_CURRENT],
             current_limits[CONF_MAX_CURRENT]
         ))
 
-# 传感器注册
 @sensor.register_sensor("huawei_r4875g1", SENSOR_SCHEMA)
 async def huawei_sensor_to_code(config, sensor_id, template_arg, args):
     parent = await cg.get_variable(config[CONF_ID])
@@ -178,7 +170,6 @@ async def huawei_sensor_to_code(config, sensor_id, template_arg, args):
     await sensor.register_sensor(var, config)
     return var
 
-# 状态传感器注册
 @binary_sensor.register_binary_sensor("huawei_r4875g1", BINARY_SENSOR_SCHEMA)
 async def huawei_binary_sensor_to_code(config, sensor_id, template_arg, args):
     parent = await cg.get_variable(config[CONF_ID])
@@ -186,7 +177,6 @@ async def huawei_binary_sensor_to_code(config, sensor_id, template_arg, args):
     await binary_sensor.register_binary_sensor(var, config)
     return var
 
-# 动作注册
 @automation.register_action(
     "huawei_r4875g1.set_voltage",
     huawei_r4875g1_ns.class_("HuaweiR4875G1SetVoltageAction"),

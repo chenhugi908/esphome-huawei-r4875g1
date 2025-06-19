@@ -3,6 +3,7 @@
 namespace esphome {
 namespace huawei_r4875g1 {
 
+// 支持的传感器类型。必须和Python侧保持一致。
 enum SensorType {
   INPUT_VOLTAGE = 0,
   INPUT_CURRENT,

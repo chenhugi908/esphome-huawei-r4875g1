@@ -11,7 +11,6 @@ external_components:
       type: local
       path: esphome/components/huawei_r4875g1
 
-# CAN总线配置
 canbus:
   - platform: esp32_can
     id: can_bus1
@@ -20,13 +19,11 @@ canbus:
     bit_rate: 125kbps
     can_id: 0
 
-# 华为整流器配置
 huawei_r4875g1:
   id: huawei1
   canbus_id: can_bus1
   update_interval: 1s
-  
-  # 传感器校准
+
   sensors:
     input_voltage:
       multiplier: 1.012
@@ -40,16 +37,14 @@ huawei_r4875g1:
     output_current:
       multiplier: 0.985
       offset: 0.1
-  
-  # 高压模式配置
+
   voltage_limits:
     min: 41.5
-    max: 100.0  # 最高100V
+    max: 100.0
   current_limits:
     min: 0.0
     max: 90.5
 
-# 传感器定义
 sensor:
   - platform: huawei_r4875g1
     type: input_voltage
@@ -57,13 +52,20 @@ sensor:
     unit_of_measurement: "V"
     accuracy_decimals: 1
     id: input_voltage
-    
+
   - platform: huawei_r4875g1
     type: output_voltage
     name: "Output Voltage"
     unit_of_measurement: "V"
     accuracy_decimals: 2
     id: output_voltage
+
+  - platform: huawei_r4875g1
+    type: input_current
+    name: "Input Current"
+    unit_of_measurement: "A"
+    accuracy_decimals: 2
+    id: input_current
 
   - platform: huawei_r4875g1
     type: output_current
@@ -80,19 +82,30 @@ sensor:
     id: output_power
 
   - platform: huawei_r4875g1
+    type: input_frequency
+    name: "Input Frequency"
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 1
+    id: input_frequency
+
+  - platform: huawei_r4875g1
     type: temperature
     name: "Temperature"
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     id: temperature
 
-# 状态指示
 binary_sensor:
   - platform: huawei_r4875g1
     name: "Operational Status"
     id: operational_status
 
-# API服务
+  - platform: template
+    name: "Huawei R4875G1 Online"
+    lambda: |-
+      return id(huawei1).is_online();
+    update_interval: 3s
+
 api:
   services:
     - service: set_output_voltage
@@ -121,6 +134,5 @@ api:
         - huawei_r4875g1.disable:
             id: huawei1
 
-# 可选：日志配置
 logger:
   baud_rate: 0
